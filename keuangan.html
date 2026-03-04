@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bagus Himawan - Data Keuangan</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-slate-50 font-sans min-h-screen flex items-center justify-center py-10">
+
+    <div id="auth-screen" class="max-w-md w-full bg-white p-8 rounded-3xl shadow-2xl mx-4">
+        <div class="text-center mb-8">
+            <div id="auth-icon" class="bg-indigo-100 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl">🔐</div>
+            <h2 id="auth-title" class="text-2xl font-bold text-gray-800">Masukkan PIN</h2>
+            <p id="auth-desc" class="text-gray-500 text-sm mt-2">Amankan data finansial Anda.</p>
+        </div>
+        <input type="password" id="pinInput" class="w-full p-4 border-2 border-gray-100 rounded-2xl text-center text-2xl tracking-[0.5em] focus:border-indigo-500 outline-none transition-all mb-4">
+        <button onclick="handleAuth()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 rounded-2xl shadow-lg transition active:scale-95">Buka Dashboard</button>
+    </div>
+
+    <div id="dashboard" class="max-w-2xl w-full grid grid-cols-1 md:grid-cols-2 gap-6 mx-4 hidden animate-fadeIn">
+        
+        <div class="space-y-6">
+            <div class="bg-indigo-900 p-6 rounded-3xl text-white shadow-xl">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <p class="text-xs opacity-60 uppercase font-bold">Total Saldo</p>
+                        <h1 id="balance" class="text-3xl font-bold">Rp 0</h1>
+                    </div>
+                    <button onclick="logout()" class="text-[10px] bg-white/10 px-3 py-1 rounded-lg hover:bg-white/20">Kunci</button>
+                </div>
+                <div class="grid grid-cols-2 gap-4 mt-6 pt-5 border-t border-white/10">
+                    <div>
+                        <p class="text-[10px] opacity-50 uppercase">Pemasukan</p>
+                        <p id="money-plus" class="font-bold text-emerald-400">Rp 0</p>
+                    </div>
+                    <div>
+                        <p class="text-[10px] opacity-50 uppercase">Pengeluaran</p>
+                        <p id="money-minus" class="font-bold text-rose-400">Rp 0</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white p-6 rounded-3xl shadow-lg border border-gray-100">
+                <h3 class="text-sm font-bold mb-4 text-gray-700 uppercase">Transaksi Baru</h3>
+                <div class="space-y-3">
+                    <input type="text" id="text" placeholder="Keterangan..." class="w-full p-3 bg-gray-50 border rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 text-sm">
+                    <input type="number" id="amount" placeholder="Jumlah (minus untuk keluar)" class="w-full p-3 bg-gray-50 border rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 text-sm">
+                    <button onclick="addTransaction()" class="w-full bg-indigo-600 text-white font-bold py-3 rounded-xl hover:bg-indigo-700 transition">Simpan</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="space-y-6">
+            <div class="bg-white p-6 rounded-3xl shadow-lg border border-gray-100">
+                <h3 class="text-sm font-bold mb-4 text-gray-700 uppercase text-center">Analisis Aliran Dana</h3>
+                <div class="relative h-48 flex justify-center">
+                    <canvas id="myChart"></canvas>
+                </div>
+            </div>
+
+            <div class="bg-white p-6 rounded-3xl shadow-lg border border-gray-100">
+                <h3 class="text-sm font-bold mb-3 text-gray-700 uppercase">Riwayat</h3>
+                <ul id="list" class="space-y-2 max-h-[150px] overflow-y-auto pr-2 text-sm"></ul>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let savedPin = localStorage.getItem('userPin');
+        let transactions = JSON.parse(localStorage.getItem('transactions')) || [];
+        let myChart;
+
+        function init() {
+            if (!savedPin) {
+                document.getElementById('auth-title').innerText = "Atur PIN Baru";
+                document.getElementById('auth-icon').innerText = "🆕";
+            }
+        }
+        init();
+
+        function handleAuth() {
+            const input = document.getElementById('pinInput').value;
+            if (!savedPin) {
+                if(input.length < 4) return alert("Min 4 angka");
+                localStorage.setItem('userPin', input);
+                location.reload();
+            } else {
+                if(input === savedPin) showDashboard();
+                else alert("Salah!");
+            }
+        }
+
+        function showDashboard() {
+            document.getElementById('auth-screen').classList.add('hidden');
+            document.getElementById('dashboard').classList.remove('hidden');
+            updateUI();
+        }
+
+        function addTransaction() {
+            const t = document.getElementById('text'), a = document.getElementById('amount');
+            if(!t.value || !a.value) return;
+            transactions.push({ id: Date.now(), text: t.value, amount: +a.value });
+            localStorage.setItem('transactions', JSON.stringify(transactions));
+            t.value = ''; a.value = '';
+            updateUI();
+        }
+
+        function removeTransaction(id) {
+            transactions = transactions.filter(t => t.id !== id);
+            localStorage.setItem('transactions', JSON.stringify(transactions));
+            updateUI();
+        }
+
+        function updateUI() {
+            const list = document.getElementById('list');
+            list.innerHTML = '';
+            
+            let inc = 0, exp = 0;
+            transactions.forEach(t => {
+                if(t.amount > 0) inc += t.amount; else exp += Math.abs(t.amount);
+                const li = document.createElement('li');
+                li.className = "flex justify-between p-2 bg-gray-50 rounded-lg border-l-4 " + (t.amount > 0 ? 'border-emerald-400' : 'border-rose-400');
+                li.innerHTML = `<span>${t.text}</span> <div class="flex gap-2 font-bold ${t.amount > 0 ? 'text-emerald-600' : 'text-rose-600'}">Rp ${Math.abs(t.amount).toLocaleString()} <button onclick="removeTransaction(${t.id})" class="text-gray-300">✕</button></div>`;
+                list.prepend(li);
+            });
+
+            document.getElementById('balance').innerText = `Rp ${(inc - exp).toLocaleString()}`;
+            document.getElementById('money-plus').innerText = `Rp ${inc.toLocaleString()}`;
+            document.getElementById('money-minus').innerText = `Rp ${exp.toLocaleString()}`;
+
+            updateChart(inc, exp);
+        }
+
+        function updateChart(inc, exp) {
+            const ctx = document.getElementById('myChart').getContext('2d');
+            if (myChart) myChart.destroy();
+            
+            myChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Masuk', 'Keluar'],
+                    datasets: [{
+                        data: [inc, exp],
+                        backgroundColor: ['#34d399', '#fb7185'],
+                        borderWidth: 0,
+                        hoverOffset: 10
+                    }]
+                },
+                options: {
+                    maintainAspectRatio: false,
+                    plugins: { legend: { position: 'bottom' } }
+                }
+            });
+        }
+
+        function logout() { location.reload(); }
+    </script>
+</body>
+</html>
